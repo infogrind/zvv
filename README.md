@@ -30,6 +30,10 @@ direction), with the right one picked automatically by time of day.
   and respect `Retry-After`. Manual refresh is limited to once per 5 s and
   never skips a backoff.
 - **Stale-data warning** when the last successful update is older than 90 s.
+- **Nearby stops**: the "📍 nearby" button uses your location to list the five
+  closest stops within 1 km, with their distance. Picking one opens a
+  temporary, unfiltered board for that stop as an extra tab (up to 12
+  departures); its ✕ closes it again. The tab is not kept across reloads.
 - **Installable** as a home-screen app (web app manifest, Apple touch icon,
   standalone display mode).
 - **Light and dark mode** follow the system setting.
@@ -83,16 +87,17 @@ Zurich hour is shown by default.
 Other tunables live next to it: `REFRESH_SECONDS` (poll interval),
 `MIN_REFRESH_SECONDS` (manual refresh limit), `STALE_AFTER_SECONDS`,
 `DEPARTURE_LIMIT` (rows shown) and `FETCH_COUNT` (raw departures requested so
-enough survive the filters).
+enough survive the filters). The nearby search uses `NEARBY_STOP_COUNT`,
+`NEARBY_RADIUS_METERS` and `NEARBY_DEPARTURE_LIMIT`.
 
 ## Project structure
 
 | Path | Purpose |
 | --- | --- |
-| `index.html` | Page markup, Content-Security-Policy and the API key dialog. |
+| `index.html` | Page markup, Content-Security-Policy, and the API key and nearby-stops dialogs. |
 | `style.css` | Departure board styles, light and dark themes. |
 | `js/main.js` | Entry point; calls `startApp()`. |
-| `js/app.js` | UI: boards, tabs, polling, rendering and API key handling. |
+| `js/app.js` | UI: boards, tabs, nearby stops, polling, rendering and API key handling. |
 | `js/ojp.js` | OJP 2.0 client: XML request building, response parsing, stop matching, and pure formatting and filtering helpers. |
 | `manifest.webmanifest`, `icon.svg`, `icon-180.png` | Home-screen install metadata and icons. |
 
@@ -107,8 +112,14 @@ enough survive the filters).
    stop, with real-time data included. The response is parsed with the
    browser's `DOMParser`, sorted by effective time, and filtered by the
    board's lines and direction.
+3. **Nearby stops** – the browser's Geolocation API provides the position,
+   which is sent as an `OJPLocationInformationRequest` restricted to a circle
+   around it. Duplicates are merged (whole stops preferred over platforms) and
+   the results are sorted by distance in the browser. The resulting stop ID
+   goes straight into the departures request.
 
-`startApp()` accepts its document, storage, `fetch` and clock as parameters,
+`startApp()` accepts its document, storage, `fetch`, clock and geolocation as
+parameters,
 so the app can be driven from tests without a browser or network.
 
 ## Privacy and security
@@ -121,6 +132,8 @@ so the app can be driven from tests without a browser or network.
 - Requests are sent without cookies or a referrer, and error messages never
   include the key.
 - "Forget key" in the API key dialog removes it from the browser.
+- Your location is only requested when you tap "📍 nearby". It is sent only to
+  `api.opentransportdata.swiss` (to find stops) and is not stored.
 
 ## License
 

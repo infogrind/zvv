@@ -113,6 +113,55 @@ export function buildLocationRequestXml(
   return wrapServiceRequest(inner, ts, requestorRef, language);
 }
 
+/** Formats a coordinate in decimal degrees for OJP (WGS84). */
+function formatCoordinate(value, name, limit) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || Math.abs(num) > limit) {
+    throw new Error(`${name} must be a number within ±${limit}`);
+  }
+  return num.toFixed(6);
+}
+
+/**
+ * Builds an OJP 2.0 OJPLocationInformationRequest for stops within a circle
+ * around a WGS84 coordinate.
+ * @param {{latitude: number, longitude: number}} position
+ * @param {!Date} requestTime
+ * @param {{radiusMeters?: number, maxResults?: number, requestorRef?: string,
+ *     language?: string}=} options
+ * @return {string}
+ */
+export function buildNearbyStopsRequestXml(
+    position, requestTime,
+    {radiusMeters = 1000, maxResults = 20, requestorRef = REQUESTOR_REF,
+     language = 'de'} = {}) {
+  const lat = formatCoordinate(position.latitude, 'latitude', 90);
+  const lon = formatCoordinate(position.longitude, 'longitude', 180);
+  const radius = Math.max(1, Math.round(radiusMeters));
+  const count = Math.max(1, Math.floor(maxResults));
+  const ts = formatUtcIso(requestTime);
+  const inner =
+      '      <OJPLocationInformationRequest>\n' +
+      `        <siri:RequestTimestamp>${ts}</siri:RequestTimestamp>\n` +
+      '        <InitialInput>\n' +
+      '          <GeoRestriction>\n' +
+      '            <Circle>\n' +
+      '              <Center>\n' +
+      `                <siri:Longitude>${lon}</siri:Longitude>\n` +
+      `                <siri:Latitude>${lat}</siri:Latitude>\n` +
+      '              </Center>\n' +
+      `              <Radius>${radius}</Radius>\n` +
+      '            </Circle>\n' +
+      '          </GeoRestriction>\n' +
+      '        </InitialInput>\n' +
+      '        <Restrictions>\n' +
+      '          <Type>stop</Type>\n' +
+      `          <NumberOfResults>${count}</NumberOfResults>\n` +
+      '        </Restrictions>\n' +
+      '      </OJPLocationInformationRequest>\n';
+  return wrapServiceRequest(inner, ts, requestorRef, language);
+}
+
 /**
  * Builds an OJP 2.0 OJPStopEventRequest for departures at a stop.
  * @param {{stopRef: string, name: string, isStopPoint: boolean}} stop
@@ -250,11 +299,21 @@ function checkSiriErrors(root, delivery) {
   }
 }
 
+/** Reads Place/GeoPosition as {latitude, longitude}, or null. */
+function parseGeoPosition(place) {
+  const geo = child(place, 'GeoPosition');
+  if (!geo) return null;
+  const latitude = parseFloat(text(geo, 'Latitude'));
+  const longitude = parseFloat(text(geo, 'Longitude'));
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return {latitude, longitude};
+}
+
 /**
  * Parses StopPlace and StopPoint results from a LocationInformation response.
  * @param {string} xmlText
  * @return {!Array<{stopRef: string, name: string, isStopPoint: boolean,
- *     probability: number}>}
+ *     probability: number, position: ?{latitude: number, longitude: number}}>}
  */
 export function parseLocationResponseXml(xmlText) {
   const root = parseXml(xmlText).documentElement;
@@ -269,6 +328,7 @@ export function parseLocationResponseXml(xmlText) {
     if (!place) continue;
     const probability = parseFloat(text(placeRes, 'Probability')) || 0;
     const label = text(place, 'Name/Text');
+    const position = parseGeoPosition(place);
     const stopPlace = child(place, 'StopPlace');
     if (stopPlace) {
       const stopRef = text(stopPlace, 'StopPlaceRef');
@@ -278,6 +338,7 @@ export function parseLocationResponseXml(xmlText) {
           name: text(stopPlace, 'StopPlaceName/Text') || label || stopRef,
           isStopPoint: false,
           probability,
+          position,
         });
         continue;
       }
@@ -291,11 +352,66 @@ export function parseLocationResponseXml(xmlText) {
           name: text(stopPoint, 'StopPointName/Text') || label || pointRef,
           isStopPoint: true,
           probability,
+          position,
         });
       }
     }
   }
   return results;
+}
+
+const EARTH_RADIUS_METERS = 6371008.8;
+
+/** Great-circle distance in metres between two WGS84 positions. */
+export function distanceMeters(a, b) {
+  const rad = (deg) => deg * Math.PI / 180;
+  const dLat = rad(b.latitude - a.latitude);
+  const dLon = rad(b.longitude - a.longitude);
+  const h = Math.sin(dLat / 2) ** 2 +
+      Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) *
+      Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** "180 m" below 1 km (rounded to 10 m), otherwise "1.2 km". */
+export function formatDistance(meters) {
+  if (meters < 995) return `${Math.max(10, Math.round(meters / 10) * 10)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+/**
+ * The closest distinct stops to `origin`, nearest first, each with a
+ * `distanceMeters` field. Whole stops (stop places) are preferred: a platform
+ * (stop point) is kept only when no stop of the same name is in the list.
+ * Results without coordinates sort last, in server order.
+ */
+export function nearestStops(candidates, origin, limit = 5) {
+  const byName = new Map();
+  for (const cand of candidates) {
+    const key = normalizeStopText(cand.name);
+    const prev = byName.get(key);
+    if (!prev || (prev.isStopPoint && !cand.isStopPoint)) {
+      byName.set(key, cand);
+    }
+  }
+  return Array.from(byName.values())
+      .map((cand, index) => ({
+        ...cand,
+        index,
+        distanceMeters: cand.position ?
+            distanceMeters(origin, cand.position) : null,
+      }))
+      .sort((a, b) => {
+        if (a.distanceMeters === null || b.distanceMeters === null) {
+          if (a.distanceMeters !== b.distanceMeters) {
+            return a.distanceMeters === null ? 1 : -1;
+          }
+          return a.index - b.index;
+        }
+        return a.distanceMeters - b.distanceMeters;
+      })
+      .slice(0, limit)
+      .map(({index, ...stop}) => stop);
 }
 
 function normalizeStopText(value) {
@@ -709,6 +825,20 @@ export class OjpClient {
   async searchStops(query, maxResults = 10) {
     const xml = buildLocationRequestXml(query, this.clock(), {maxResults});
     return parseLocationResponseXml(await this.postXml(xml));
+  }
+
+  /**
+   * Finds the stops closest to a position, nearest first.
+   * @param {{latitude: number, longitude: number}} position
+   * @param {{limit?: number, radiusMeters?: number}=} options
+   */
+  async findNearbyStops(position, {limit = 5, radiusMeters = 1000} = {}) {
+    // Ask for more than `limit`: platforms and duplicates are dropped, and
+    // the server orders by match quality rather than by distance.
+    const xml = buildNearbyStopsRequestXml(
+        position, this.clock(), {radiusMeters, maxResults: limit * 4});
+    const candidates = parseLocationResponseXml(await this.postXml(xml));
+    return nearestStops(candidates, position, limit);
   }
 
   /** Resolves a stop name to the best matching stop. */
