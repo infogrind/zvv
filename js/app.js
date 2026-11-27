@@ -621,7 +621,14 @@ export function startApp({
     const row = el(doc, 'li', `departure ${state}`);
     const countdown = ojp.formatCountdown(ojp.effectiveTime(dep), now);
 
-    row.append(el(doc, 'span', 'line', dep.line));
+    const line = el(doc, 'span', 'line', dep.line);
+    // Trams get their line color (see style.css). Only trams: bus numbers
+    // elsewhere (e.g. Winterthur bus 2) overlap the Zurich tram numbers.
+    // Cancelled rows stay grey.
+    if (dep.mode.toLowerCase() === 'tram' && state !== ojp.State.CANCELLED) {
+      line.dataset.tram = dep.line.trim();
+    }
+    row.append(line);
     row.append(el(doc, 'span', 'destination',
                   ojp.shortenDestination(dep.destination, stopName)));
 
