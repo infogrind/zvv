@@ -63,10 +63,11 @@
   <dialog id="nearby-dialog" class="key-dialog nearby-dialog">
     <form id="nearby-form" method="dialog">
       <h2>Stops near you</h2>
+      <p id="nearby-location" class="nearby-location"></p>
       <p id="nearby-message" class="nearby-message" aria-live="polite"></p>
       <ul id="nearby-list" class="nearby-list"></ul>
       <div class="dialog-buttons">
-        <button id="nearby-retry" type="button" hidden>Try again</button>
+        <button id="nearby-refresh" type="button">↻ refresh location</button>
         <button id="nearby-cancel" type="button">Cancel</button>
       </div>
     </form>

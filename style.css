@@ -396,6 +396,20 @@ button {
   font-weight: bold;
 }
 
+.nearby-location {
+  margin: -0.4rem 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.nearby-location:empty {
+  display: none;
+}
+
+.dialog-buttons button:disabled {
+  opacity: 0.5;
+}
+
 .nearby-message {
   color: var(--muted);
 }

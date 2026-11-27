@@ -43,7 +43,10 @@ The screenshots use sample data (see
   never skips a backoff.
 - **Stale-data warning** when the last successful update is older than 90 s.
 - **Nearby stops**: the "📍 nearby" button uses your location to list the five
-  closest stops within 1 km, with their distance. Picking one opens a
+  closest stops within 1 km, with their distance. The popup shows how old and
+  how accurate the location is; "↻ refresh location" gets a fresh fix (the
+  button itself accepts one up to a minute old, which can be a stop behind on
+  a moving tram). Picking one opens a
   temporary, unfiltered board for that stop as an extra tab (up to 12
   departures); its ✕ closes it again. The tab is not kept across reloads.
 - **Installable** as a home-screen app (web app manifest, Apple touch icon,
