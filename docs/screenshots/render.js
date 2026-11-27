@@ -1,13 +1,14 @@
 /**
  * @fileoverview Renders the README screenshots with sample data.
  *
- * Needs Node.js with Playwright and Chromium, and the app served locally:
+ * Step-by-step instructions: README.md, "Regenerating the screenshots".
+ * In short, with Playwright installed and the app served on port 8765:
  *
  *   python3 -m http.server 8765        # in the repository root
  *   node docs/screenshots/render.js    # writes the PNGs next to this file
  *
  * All OJP responses, the location and the clock (07:42:10 in Zurich) are
- * faked, so no API key is needed and the pictures do not change between runs.
+ * faked, so no API key is needed and the pictures look the same each run.
  */
 const {chromium} = require('playwright');
 const OUT = process.argv[2] || __dirname;
