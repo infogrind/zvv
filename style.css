@@ -446,6 +446,49 @@ button {
   white-space: nowrap;
 }
 
+/*
+ * Zurich tram line colors (VBZ), as listed on de.wikipedia.org
+ * "Strassenbahn Zürich" for the network from December 2026. Lines 16, 50 and
+ * 51 are the temporary construction lines of 2026. The badge is
+ * `<span class="line" data-tram="N">`, set for trams only.
+ */
+.departure .line[data-tram] {
+  background: var(--tram-bg);
+  border-color: var(--tram-bg);
+  color: var(--tram-fg);
+}
+
+.line[data-tram="2"] { --tram-bg: #ee1d23; --tram-fg: #fff; }
+.line[data-tram="3"] { --tram-bg: #00892f; --tram-fg: #fff; }
+.line[data-tram="4"] { --tram-bg: #11296f; --tram-fg: #fff; }
+.line[data-tram="5"] { --tram-bg: #734522; --tram-fg: #fff; }
+.line[data-tram="6"] { --tram-bg: #ca7d3c; --tram-fg: #fff; }
+.line[data-tram="7"] { --tram-bg: #000000; --tram-fg: #fff; }
+.line[data-tram="8"] { --tram-bg: #8ab51f; --tram-fg: #000; }
+.line[data-tram="9"] { --tram-bg: #11296f; --tram-fg: #fff; }
+.line[data-tram="10"] { --tram-bg: #cf3a72; --tram-fg: #fff; }
+.line[data-tram="11"] { --tram-bg: #00892f; --tram-fg: #fff; }
+.line[data-tram="12"] { --tram-bg: #92d6e3; --tram-fg: #000; }
+.line[data-tram="13"] { --tram-bg: #ffc100; --tram-fg: #000; }
+.line[data-tram="14"] { --tram-bg: #008dc5; --tram-fg: #fff; }
+.line[data-tram="15"] { --tram-bg: #ee1d23; --tram-fg: #fff; }
+.line[data-tram="16"] { --tram-bg: #165e8b; --tram-fg: #fff; }
+.line[data-tram="17"] { --tram-bg: #8e224d; --tram-fg: #fff; }
+.line[data-tram="18"] { --tram-bg: #eb3c2e; --tram-fg: #fff; }
+.line[data-tram="20"] { --tram-bg: #8e224d; --tram-fg: #fff; }
+.line[data-tram="21"] { --tram-bg: #ffc100; --tram-fg: #000; }
+.line[data-tram="50"] { --tram-bg: #000000; --tram-fg: #fff; }
+.line[data-tram="51"] { --tram-bg: #000000; --tram-fg: #fff; }
+
+@media (prefers-color-scheme: dark) {
+  /* Black badges (7, 50, 51) would vanish on the dark panel. */
+  .departure .line[data-tram="7"],
+  .departure .line[data-tram="50"],
+  .departure .line[data-tram="51"] {
+    border-color: var(--muted);
+  }
+}
+
 [hidden] {
   display: none !important;
 }

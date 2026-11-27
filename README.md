@@ -14,6 +14,9 @@ direction), with the right one picked automatically by time of day.
 - **Live departure board** with countdowns (`now`, `4'`, or `HH:MM` for
   departures an hour or more away), the forecast clock time, and a marker for
   whether the time is real-time (`●`) or timetable-only (`~`).
+- **Tram line colors**: Zurich tram line numbers are shown in their official
+  VBZ line color (defined at the end of `style.css`). Buses and cancelled
+  departures keep the plain outlined badge.
 - **Status at a glance**: a summary row shows how many departures have live
   data, plus delays (with the maximum delay), cancellations, skipped stops and
   disruptions.
