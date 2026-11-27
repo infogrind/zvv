@@ -9,6 +9,15 @@ no build step and no third-party JavaScript.
 It is built around a commute: a small set of hardcoded "boards" (stop + line +
 direction), with the right one picked automatically by time of day.
 
+## Screenshots
+
+| Commute board | Stops near you | Nearby board, dark mode |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/board.png" width="260" alt="Tram 4 board at Wetlistrasse with live countdowns, a 2-minute delay and a disruption message"> | <img src="docs/screenshots/nearby-stops.png" width="260" alt="Popup listing the five closest stops with their distance"> | <img src="docs/screenshots/nearby-board-dark.png" width="260" alt="Unfiltered board for Bellevue in dark mode, with tram line numbers in their line colors"> |
+
+The screenshots use sample data (see
+[Regenerating the screenshots](#regenerating-the-screenshots)).
+
 ## Features
 
 - **Live departure board** with countdowns (`now`, `4'`, or `HH:MM` for
@@ -52,7 +61,56 @@ direction), with the right one picked automatically by time of day.
 The free tier allows 50 requests per minute and 20,000 per day. At one request
 every 30 s for the visible board, the app stays well within that.
 
-## Running locally
+## Deploying
+
+Serve the repository root as static files from any HTTPS host (GitHub Pages,
+Netlify, an S3 bucket, a home server, ...). There is nothing to build. HTTPS is
+recommended because home-screen installation and some browser features require
+a secure context.
+
+## How to fork with Claude Code
+
+You can have [Claude Code](https://claude.com/claude-code) set up your own
+copy, with your own stops, published on your own GitHub Pages site:
+
+1. Click **Fork** at the top of this repository's GitHub page to copy it to
+   your account.
+2. Open your fork in Claude Code: clone it and run `claude` in the folder, or
+   choose the repository at [claude.ai/code](https://claude.ai/code).
+3. Paste this prompt:
+
+```text
+This repository is my fork of a small ZVV departures web app (plain HTML, CSS
+and JavaScript, no build step; see README.md). Please make it my own version:
+
+1. Ask me which departure boards I want. For each: the stop (e.g.
+   "Zürich, Paradeplatz"), the line or lines (empty for all), the direction
+   (a word from the destination name, e.g. "Bahnhof", or empty for all), and
+   from which hour of the day it should be the default board. Also ask what
+   the app should be called on my home screen.
+2. Replace PRESETS in js/app.js with my boards, and update the app name in
+   index.html, manifest.webmanifest and the README title. Leave everything
+   else as it is.
+3. Serve the app locally (python3 -m http.server) and check in a browser that
+   it loads without console errors. Do not ask for my OJP API key: I will
+   enter it in the app myself, and it must never be committed.
+4. Commit the changes to the main branch and push.
+5. Publish the site with GitHub Pages from the main branch, root folder, for
+   example with: gh api -X POST repos/OWNER/REPO/pages -f "source[branch]=main" -f "source[path]=/"
+   If you cannot do that from here, give me the exact steps in the
+   repository's Settings → Pages instead.
+6. Tell me the site's URL (https://USERNAME.github.io/REPO/), how to add it
+   to my phone's home screen, and where to get an OJP 2.0 API key.
+```
+
+Once the site is live, open it on your phone, add it to the home screen, and
+paste your API key (see [Getting an API key](#getting-an-api-key)). If a board
+says that no stop was found, or shows no departures, ask Claude to adjust that
+board's stop name or direction.
+
+## Development
+
+### Running locally
 
 The app uses ES modules, so it must be served over HTTP rather than opened as a
 `file://` URL. Any static file server works, for example:
@@ -62,12 +120,46 @@ python3 -m http.server 8000
 # then open http://localhost:8000/
 ```
 
-## Deploying
+### Regenerating the screenshots
 
-Serve the repository root as static files from any HTTPS host (GitHub Pages,
-Netlify, an S3 bucket, a home server, ...). There is nothing to build. HTTPS is
-recommended because home-screen installation and some browser features require
-a secure context.
+The screenshots in this README are made by
+[`docs/screenshots/render.js`](docs/screenshots/render.js). It opens the app in
+a headless Chromium at phone size and fakes everything outside the page: the
+OJP responses (sample departures, a disruption, five nearby stops), the
+location, and the clock (07:42:10 in Zurich). No API key or network access is
+needed, and the pictures look the same each run. Regenerate them after
+changing the UI:
+
+1. Install a current LTS release of [Node.js](https://nodejs.org/) and Python 3.
+2. From the repository root, install Playwright and its Chromium browser.
+   `node_modules/` is ignored by git, and no `package.json` is created:
+
+   ```sh
+   npm install --no-save --no-package-lock playwright
+   npx playwright install chromium
+   ```
+
+3. Serve the app on port 8765 (the script expects that port) and leave it
+   running:
+
+   ```sh
+   python3 -m http.server 8765
+   ```
+
+4. In a second terminal, from the repository root, render the screenshots:
+
+   ```sh
+   node docs/screenshots/render.js
+   ```
+
+   This overwrites `board.png`, `nearby-stops.png` and
+   `nearby-board-dark.png` in `docs/screenshots/`. Pass a directory as an
+   argument to write them somewhere else instead.
+5. Check the new images (for example with `git diff --stat` and an image
+   viewer), stop the server with Ctrl+C, and commit the PNGs.
+
+To change what the screenshots show, edit the sample data near the top of
+`render.js`.
 
 ## Configuration
 
@@ -103,6 +195,7 @@ enough survive the filters). The nearby search uses `NEARBY_STOP_COUNT`,
 | `js/app.js` | UI: boards, tabs, nearby stops, polling, rendering and API key handling. |
 | `js/ojp.js` | OJP 2.0 client: XML request building, response parsing, stop matching, and pure formatting and filtering helpers. |
 | `manifest.webmanifest`, `icon.svg`, `icon-180.png` | Home-screen install metadata and icons. |
+| `docs/screenshots/` | README screenshots and `render.js`, which regenerates them with sample data. |
 
 ### How it talks to OJP
 
