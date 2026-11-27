@@ -51,11 +51,19 @@ export const NEARBY_BOARD_ID = 'nearby';
  */
 export const FOLLOW_DEPARTURE_LIMIT = 4;
 export const FOLLOW_FETCH_COUNT = 100;
-/** Geolocation options: a fix up to a minute old is good enough. */
+/**
+ * Geolocation options. The nearby button accepts a fix up to a minute old,
+ * which is quick; "refresh location" in the popup always asks for a new one
+ * (e.g. on a moving tram, where a minute can be a whole stop).
+ */
 const GEOLOCATION_OPTIONS = Object.freeze({
   enableHighAccuracy: true,
   timeout: 15000,
   maximumAge: 60000,
+});
+const FRESH_GEOLOCATION_OPTIONS = Object.freeze({
+  ...GEOLOCATION_OPTIONS,
+  maximumAge: 0,
 });
 
 export const TOKEN_STORAGE_KEY = 'zvv-webapp.ojp-token';
@@ -170,7 +178,8 @@ export function startApp({
     nearbyDialog: $('nearby-dialog'),
     nearbyMessage: $('nearby-message'),
     nearbyList: $('nearby-list'),
-    nearbyRetry: $('nearby-retry'),
+    nearbyLocation: $('nearby-location'),
+    nearbyRefresh: $('nearby-refresh'),
     nearbyCancel: $('nearby-cancel'),
   };
 
@@ -292,11 +301,25 @@ export function startApp({
     }
   }
 
-  function setNearbyStatus(message, {isError = false, canRetry = false} = {}) {
+  function setNearbyStatus(message, {isError = false} = {}) {
     ui.nearbyMessage.textContent = message;
     ui.nearbyMessage.hidden = !message;
     ui.nearbyMessage.classList.toggle('error', isError);
-    ui.nearbyRetry.hidden = !canRetry;
+  }
+
+  /** "location just now, ±20 m" / "location 45 s old, ±20 m". */
+  function describePosition(position) {
+    const ageS = Math.max(0, Math.round(
+        (clock().getTime() - position.timestamp) / 1000));
+    let age = 'just now';
+    if (ageS >= 120) {
+      age = `${Math.floor(ageS / 60)} min old`;
+    } else if (ageS >= 5) {
+      age = `${ageS} s old`;
+    }
+    const accuracy = Number.isFinite(position.accuracy) ?
+        `, ±${ojp.formatDistance(position.accuracy)}` : '';
+    return `location ${age}${accuracy}`;
   }
 
   function closeNearbyDialog() {
@@ -304,21 +327,37 @@ export function startApp({
     hideDialog(ui.nearbyDialog);
   }
 
-  function getPosition() {
+  function getPosition(fresh) {
     return new Promise((resolve, reject) => {
       geolocation.getCurrentPosition(
           (pos) => resolve({
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            timestamp: pos.timestamp,
           }),
-          reject, GEOLOCATION_OPTIONS);
+          reject, fresh ? FRESH_GEOLOCATION_OPTIONS : GEOLOCATION_OPTIONS);
     });
   }
 
-  async function lookUpNearbyStops() {
+  /**
+   * Fills the nearby popup. `fresh` insists on a new location fix instead of
+   * one the browser cached in the last minute.
+   */
+  async function lookUpNearbyStops({fresh = false} = {}) {
     const generation = ++nearbyGeneration;
     const isStale = () => generation !== nearbyGeneration;
     ui.nearbyList.replaceChildren();
+    ui.nearbyLocation.textContent = '';
+    ui.nearbyRefresh.disabled = true;
+    try {
+      await fillNearbyStops(fresh, isStale);
+    } finally {
+      if (!isStale()) ui.nearbyRefresh.disabled = false;
+    }
+  }
+
+  async function fillNearbyStops(fresh, isStale) {
     if (!geolocation) {
       setNearbyStatus('This browser cannot share your location.',
                       {isError: true});
@@ -332,15 +371,15 @@ export function startApp({
     setNearbyStatus('Finding your location…');
     let position;
     try {
-      position = await getPosition();
+      position = await getPosition(fresh);
     } catch (err) {
       if (!isStale()) {
-        setNearbyStatus(geolocationErrorMessage(err),
-                        {isError: true, canRetry: true});
+        setNearbyStatus(geolocationErrorMessage(err), {isError: true});
       }
       return;
     }
     if (isStale()) return;
+    ui.nearbyLocation.textContent = describePosition(position);
     setNearbyStatus('Looking up stops…');
     let stops;
     try {
@@ -350,8 +389,7 @@ export function startApp({
     } catch (err) {
       if (isStale()) return;
       const message = err && err.message ? err.message : String(err);
-      setNearbyStatus(`Could not look up stops: ${message}`,
-                      {isError: true, canRetry: true});
+      setNearbyStatus(`Could not look up stops: ${message}`, {isError: true});
       if (err instanceof ojp.OjpError && err.isAuthError) {
         closeNearbyDialog();
         openKeyDialog(`${message}. Please check or replace your key.`);
@@ -361,8 +399,7 @@ export function startApp({
     if (isStale()) return;
     if (!stops.length) {
       setNearbyStatus(
-          `No stops within ${ojp.formatDistance(NEARBY_RADIUS_METERS)}.`,
-          {canRetry: true});
+          `No stops within ${ojp.formatDistance(NEARBY_RADIUS_METERS)}.`);
       return;
     }
     setNearbyStatus('');
@@ -463,7 +500,8 @@ export function startApp({
     showDialog(ui.nearbyDialog);
     lookUpNearbyStops();
   });
-  ui.nearbyRetry.addEventListener('click', () => lookUpNearbyStops());
+  ui.nearbyRefresh.addEventListener(
+      'click', () => lookUpNearbyStops({fresh: true}));
   ui.nearbyCancel.addEventListener('click', () => closeNearbyDialog());
   ui.nearbyDialog.addEventListener('close', () => {
     nearbyGeneration += 1;
