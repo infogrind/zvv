@@ -120,6 +120,9 @@ python3 -m http.server 8000
 # then open http://localhost:8000/
 ```
 
+From 1 December to 6 January the app wears a few Christmas decorations. Add
+`?xmas=1` to the URL to see them in other months, or `?xmas=0` to hide them.
+
 ### Regenerating the screenshots
 
 The screenshots in this README are made by
@@ -191,7 +194,8 @@ enough survive the filters). The nearby search uses `NEARBY_STOP_COUNT`,
 | --- | --- |
 | `index.html` | Page markup, Content-Security-Policy, and the API key and nearby-stops dialogs. |
 | `style.css` | Departure board styles, light and dark themes. |
-| `js/main.js` | Entry point; calls `startApp()`. |
+| `js/main.js` | Entry point; applies the season and calls `startApp()`. |
+| `js/season.js` | Turns the Christmas decorations on from 1 December to 6 January. |
 | `js/app.js` | UI: boards, tabs, nearby stops, polling, rendering and API key handling. |
 | `js/ojp.js` | OJP 2.0 client: XML request building, response parsing, stop matching, and pure formatting and filtering helpers. |
 | `manifest.webmanifest`, `icon.svg`, `icon-180.png` | Home-screen install metadata and icons. |

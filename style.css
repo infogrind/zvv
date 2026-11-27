@@ -489,6 +489,136 @@ button {
   }
 }
 
+/*
+ * Christmas season (html.xmas, set by js/season.js from 1 December to
+ * 6 January): fairy lights along the top of the board, a star for the logo,
+ * and light snow behind the board. All of it stays out of the way of the
+ * departures and is still when the user prefers reduced motion.
+ */
+:root {
+  --xmas-red: #d1242f;
+  --xmas-green: #1a7f37;
+  --xmas-gold: #d4a72c;
+  --xmas-blue: #0969da;
+  --xmas-snow: rgba(84, 110, 140, 0.28);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --xmas-red: #ff6a69;
+    --xmas-green: #4ac26b;
+    --xmas-gold: #f2cc60;
+    --xmas-blue: #6cb6ff;
+    --xmas-snow: rgba(230, 237, 243, 0.35);
+  }
+}
+
+.xmas .logo-mark {
+  display: none;
+}
+
+.xmas .logo::before {
+  content: "★";
+  color: var(--xmas-gold);
+}
+
+/* A wire with four colors of bulbs, repeating every 48 px. */
+.xmas .board::before {
+  content: "";
+  display: block;
+  height: 12px;
+  background:
+    radial-gradient(circle at 50% 70%, var(--xmas-red) 2.6px, transparent 3.2px)
+        6px 0 / 48px 12px repeat-x,
+    radial-gradient(circle at 50% 70%, var(--xmas-gold) 2.6px, transparent 3.2px)
+        18px 0 / 48px 12px repeat-x,
+    radial-gradient(circle at 50% 70%, var(--xmas-green) 2.6px, transparent 3.2px)
+        30px 0 / 48px 12px repeat-x,
+    radial-gradient(circle at 50% 70%, var(--xmas-blue) 2.6px, transparent 3.2px)
+        42px 0 / 48px 12px repeat-x,
+    linear-gradient(var(--border), var(--border)) 0 4px / 100% 1px no-repeat;
+  animation: xmas-twinkle 3s ease-in-out infinite alternate;
+}
+
+@keyframes xmas-twinkle {
+  from {
+    opacity: 0.65;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Snow sits behind the board, so the body must not paint over it. */
+.xmas body {
+  background: transparent;
+}
+
+.xmas body::before,
+.xmas body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Two layers of flakes scattered over a tile each; the near layer has
+ * bigger flakes and falls faster. Each moves by exactly two tiles per cycle,
+ * so the loop is seamless. */
+.xmas body::before {
+  background-image:
+    radial-gradient(circle at 186px 102px, var(--xmas-snow) 1.4px, transparent 2.0px),
+    radial-gradient(circle at 50px 59px, var(--xmas-snow) 1.5px, transparent 2.1px),
+    radial-gradient(circle at 53px 47px, var(--xmas-snow) 1.3px, transparent 1.9px),
+    radial-gradient(circle at 27px 184px, var(--xmas-snow) 1.4px, transparent 2.0px),
+    radial-gradient(circle at 42px 210px, var(--xmas-snow) 1.3px, transparent 1.9px),
+    radial-gradient(circle at 189px 200px, var(--xmas-snow) 0.9px, transparent 1.5px),
+    radial-gradient(circle at 123px 225px, var(--xmas-snow) 1.3px, transparent 1.9px),
+    radial-gradient(circle at 166px 33px, var(--xmas-snow) 0.9px, transparent 1.5px),
+    radial-gradient(circle at 47px 129px, var(--xmas-snow) 1.3px, transparent 1.9px);
+  background-size: 230px 230px;
+  animation: xmas-snow-far 46s linear infinite;
+}
+
+.xmas body::after {
+  background-image:
+    radial-gradient(circle at 231px 159px, var(--xmas-snow) 1.9px, transparent 2.5px),
+    radial-gradient(circle at 47px 134px, var(--xmas-snow) 2.2px, transparent 2.8px),
+    radial-gradient(circle at 84px 171px, var(--xmas-snow) 2.3px, transparent 2.9px),
+    radial-gradient(circle at 42px 281px, var(--xmas-snow) 2.1px, transparent 2.7px),
+    radial-gradient(circle at 21px 113px, var(--xmas-snow) 1.8px, transparent 2.4px),
+    radial-gradient(circle at 39px 163px, var(--xmas-snow) 1.7px, transparent 2.3px);
+  background-size: 310px 310px;
+  animation: xmas-snow-near 38s linear infinite;
+}
+
+@keyframes xmas-snow-far {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 460px;
+  }
+}
+
+@keyframes xmas-snow-near {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 620px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xmas .board::before,
+  .xmas body::before,
+  .xmas body::after {
+    animation: none;
+  }
+}
+
 [hidden] {
   display: none !important;
 }
