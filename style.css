@@ -1,0 +1,382 @@
+/*
+ * Departure board styles. Colors follow the system light/dark setting
+ * (prefers-color-scheme).
+ */
+
+:root {
+  color-scheme: light dark;
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --fg: #1f2328;
+  --muted: #59636e;
+  --frame: #0969da;
+  --border: #d0d7de;
+  --divider: #eaeef2;
+  --green: #1a7f37;
+  --yellow: #9a6700;
+  --orange: #bc4c00;
+  --red: #cf222e;
+  --backdrop: rgba(31, 35, 40, 0.5);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+      Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --frame: #58a6ff;
+    --border: #30363d;
+    --divider: #21262d;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --orange: #f0883e;
+    --red: #f85149;
+    --backdrop: rgba(0, 0, 0, 0.7);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+}
+
+button {
+  font: inherit;
+}
+
+.board {
+  max-width: 34rem;
+  margin: 0 auto;
+  border: 1px solid var(--frame);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem 0.2rem;
+}
+
+.logo {
+  color: var(--frame);
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.sep,
+.clock {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.age {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.age.warn {
+  color: var(--orange);
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  padding: 0.2rem 0.8rem 0.6rem;
+  border-bottom: 1px solid var(--frame);
+  font-size: 0.85rem;
+}
+
+.badge.ok {
+  color: var(--green);
+}
+
+.badge.delayed {
+  color: var(--yellow);
+}
+
+.badge.warn {
+  color: var(--orange);
+}
+
+.badge.error {
+  color: var(--red);
+  font-weight: bold;
+}
+
+.badge.muted {
+  color: var(--muted);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem 0;
+}
+
+.tab {
+  flex: 1;
+  min-height: 2.6rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  border-color: var(--frame);
+  color: var(--frame);
+  font-weight: bold;
+}
+
+.stop-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+  padding: 0.8rem 0.8rem 0.3rem;
+  color: var(--frame);
+  font-weight: bold;
+}
+
+.stop-filters {
+  color: var(--frame);
+  font-weight: normal;
+  opacity: 0.85;
+}
+
+.departures {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.8rem 0.6rem;
+}
+
+.departure {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 3rem;
+  border-bottom: 1px solid var(--divider);
+}
+
+.departure .line {
+  justify-self: start;
+  min-width: 2.4rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--fg);
+  border-radius: 4px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.departure .destination {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.departure .right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+
+.departure .status {
+  white-space: nowrap;
+}
+
+.departure .countdown {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+  font-size: 1.25rem;
+  font-weight: bold;
+  text-align: right;
+}
+
+.departure .clock-time {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.departure.live .dot {
+  color: var(--green);
+}
+
+.departure.delayed .dot,
+.departure.delayed .delay {
+  color: var(--yellow);
+  font-weight: bold;
+}
+
+.departure.scheduled {
+  color: var(--muted);
+}
+
+.departure.scheduled .line {
+  border-color: var(--muted);
+}
+
+.departure.scheduled .countdown {
+  font-weight: normal;
+}
+
+.departure.cancelled .line,
+.departure.cancelled .destination {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.departure.cancelled .line {
+  border-color: var(--muted);
+}
+
+.departure.cancelled .status {
+  color: var(--red);
+  font-weight: bold;
+}
+
+.departure.cancelled .countdown {
+  text-decoration: line-through;
+}
+
+.departure.not_serviced .line,
+.departure.not_serviced .destination {
+  color: var(--muted);
+}
+
+.departure.not_serviced .status {
+  color: var(--orange);
+  font-weight: bold;
+}
+
+.situation {
+  padding: 0.3rem 0 0.4rem 3.8rem;
+  border-bottom: 1px solid var(--divider);
+  color: var(--orange);
+  font-size: 0.85rem;
+}
+
+.message {
+  padding: 0.8rem 0;
+  color: var(--muted);
+}
+
+.message.error {
+  color: var(--red);
+}
+
+.message.hint {
+  padding-top: 0;
+  font-size: 0.85rem;
+}
+
+.footer {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem 0.8rem;
+}
+
+.footer button,
+.dialog-buttons button {
+  min-height: 2.6rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.footer button:disabled {
+  opacity: 0.5;
+}
+
+#refresh-button {
+  flex: 1;
+}
+
+.key-dialog {
+  width: min(30rem, calc(100vw - 2rem));
+  border: 1px solid var(--frame);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--fg);
+}
+
+.key-dialog::backdrop {
+  background: var(--backdrop);
+}
+
+.key-dialog h2 {
+  margin-top: 0;
+  color: var(--frame);
+  font-size: 1.1rem;
+}
+
+.key-dialog a {
+  color: var(--frame);
+}
+
+.key-dialog .fine {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.key-message {
+  color: var(--orange);
+}
+
+#key-input {
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.dialog-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.dialog-buttons .primary {
+  border-color: var(--frame);
+  color: var(--frame);
+  font-weight: bold;
+}
+
+[hidden] {
+  display: none !important;
+}

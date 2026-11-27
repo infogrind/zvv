@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- The API key may only ever be sent to the OJP endpoint. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; manifest-src 'self'; connect-src https://api.opentransportdata.swiss; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#f6f8fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="ZVV">
+  <title>ZVV Departures</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <main class="board" aria-live="polite">
+    <header class="title-row">
+      <span class="logo">◈ ZVV DEPARTURES</span>
+      <span class="sep">│</span>
+      <span id="clock" class="clock"></span>
+      <span id="age" class="age"></span>
+    </header>
+    <div id="summary" class="summary"></div>
+    <nav id="tabs" class="tabs" role="tablist"></nav>
+    <section id="stop-header" class="stop-header"></section>
+    <ol id="departures" class="departures"></ol>
+    <footer class="footer">
+      <button id="refresh-button" type="button">↻ refresh</button>
+      <button id="key-button" type="button">API key</button>
+    </footer>
+  </main>
+
+  <dialog id="key-dialog" class="key-dialog">
+    <form id="key-form" method="dialog">
+      <h2>OJP 2.0 API key</h2>
+      <p>
+        Paste your <strong>OJP 2.0</strong> key from the
+        <a class="api-manager" target="_blank" rel="noopener noreferrer">opentransportdata.swiss API manager</a>.
+      </p>
+      <p class="fine">
+        The key is stored only in this browser's local storage and is sent only
+        to <code>api.opentransportdata.swiss</code>.
+      </p>
+      <p id="key-message" class="key-message" hidden></p>
+      <input id="key-input" type="password" autocomplete="off" autocapitalize="off"
+             spellcheck="false" placeholder="API key" aria-label="OJP API key">
+      <div class="dialog-buttons">
+        <button type="submit" class="primary">Save</button>
+        <button id="key-forget" type="button" hidden>Forget key</button>
+        <button id="key-cancel" type="button" hidden>Cancel</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

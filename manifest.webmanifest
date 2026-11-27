@@ -1,0 +1,17 @@
+{
+  "name": "ZVV Departures",
+  "short_name": "ZVV",
+  "description": "Live tram departures for my commute (OJP 2.0).",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
