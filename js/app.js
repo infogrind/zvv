@@ -44,6 +44,13 @@ export const NEARBY_STOP_COUNT = 5;
 export const NEARBY_RADIUS_METERS = 1000;
 export const NEARBY_DEPARTURE_LIMIT = 12;
 export const NEARBY_BOARD_ID = 'nearby';
+/**
+ * Tapping a departure on the nearby board follows that line and direction:
+ * this many rows, from a larger request so that a busy stop still yields
+ * enough departures of the one line.
+ */
+export const FOLLOW_DEPARTURE_LIMIT = 4;
+export const FOLLOW_FETCH_COUNT = 100;
 /** Geolocation options: a fix up to a minute old is good enough. */
 const GEOLOCATION_OPTIONS = Object.freeze({
   enableHighAccuracy: true,
@@ -84,7 +91,25 @@ function makeBoard(preset, resolvedStop = null) {
     nextFetchAt: 0,
     lastAttemptAt: 0,
     inFlight: false,
+    // Bumped when the board's filters change, so a request started before
+    // the change is followed by a fresh one.
+    filterVersion: 0,
   };
+}
+
+/**
+ * Replaces `container`'s children with `nodes` only when what they show
+ * differs from what is there. The board re-renders every second; rebuilding
+ * unchanged rows would make a tap that spans a re-render get lost.
+ */
+function replaceIfChanged(container, nodes) {
+  const key = nodes.map((n) => [
+    n.className, n.textContent, n.title || '',
+    n.dataset ? JSON.stringify(n.dataset) : '',
+  ].join('\u0001')).join('\u0002');
+  if (container.renderKey === key) return;
+  container.renderKey = key;
+  container.replaceChildren(...nodes);
 }
 
 /** Drops the "Zürich, " prefix, which every city stop has. */
@@ -363,16 +388,46 @@ export function startApp({
     return boards.findIndex((b) => b.preset.id === NEARBY_BOARD_ID);
   }
 
-  /** Replaces the nearby board (if any) with one for `stop`, and shows it. */
-  function showNearbyBoard(stop) {
-    const preset = {
+  /** Preset of the nearby board, following one line when `follow` is set. */
+  function nearbyPreset(stopName, follow = null) {
+    const base = `📍 ${shortStopName(stopName)}`;
+    return follow ? {
       id: NEARBY_BOARD_ID,
-      label: `📍 ${shortStopName(stop.name)}`,
-      stopName: stop.name,
+      label: `${base} · ${follow.line}`,
+      stopName,
+      lines: [follow.line],
+      direction: follow.direction,
+      limit: FOLLOW_DEPARTURE_LIMIT,
+      fetchCount: FOLLOW_FETCH_COUNT,
+      following: true,
+    } : {
+      id: NEARBY_BOARD_ID,
+      label: base,
+      stopName,
       lines: [],
       direction: '',
       limit: NEARBY_DEPARTURE_LIMIT,
+      following: false,
     };
+  }
+
+  /** Narrows the nearby board to one line and direction, or back to all. */
+  function setNearbyFollow(follow) {
+    const index = nearbyBoardIndex();
+    if (index < 0) return;
+    const board = boards[index];
+    board.preset = nearbyPreset(board.preset.stopName, follow);
+    board.filterVersion += 1;
+    // Reload now (the request size changed), unless backing off from errors.
+    if (board.failures === 0) board.nextFetchAt = 0;
+    activeIndex = index;
+    renderTabs();
+    tick();
+  }
+
+  /** Replaces the nearby board (if any) with one for `stop`, and shows it. */
+  function showNearbyBoard(stop) {
+    const preset = nearbyPreset(stop.name);
     const resolved = {
       stopRef: stop.stopRef,
       name: stop.name,
@@ -449,12 +504,16 @@ export function startApp({
           cacheStop(board.preset.stopName, stop);
         }
       }
-      const result = await api.fetchDepartures(board.resolvedStop, FETCH_COUNT);
+      const filterVersion = board.filterVersion;
+      const result = await api.fetchDepartures(
+          board.resolvedStop, board.preset.fetchCount || FETCH_COUNT);
       if (isStale()) return;
       board.lastGood = result;
       board.lastError = '';
       board.failures = 0;
-      board.nextFetchAt = clock().getTime() + REFRESH_SECONDS * 1000;
+      // Filters changed while this was loading: fetch again for the new ones.
+      board.nextFetchAt = filterVersion === board.filterVersion ?
+          clock().getTime() + REFRESH_SECONDS * 1000 : 0;
     } catch (err) {
       if (isStale()) return;
       const error = err instanceof ojp.OjpError ? err : new ojp.OjpError(
@@ -611,14 +670,33 @@ export function startApp({
     const filters = [];
     if (preset.lines.length) filters.push(preset.lines.join(','));
     if (preset.direction) filters.push(`→ ${preset.direction}`);
-    ui.stopHeader.replaceChildren(
-        el(doc, 'span', 'stop-name', `◉ ${name}`),
-        el(doc, 'span', 'stop-filters', filters.length ? `[${filters.join(' ')}]` : ''));
+    const nodes = [
+      el(doc, 'span', 'stop-name', `◉ ${name}`),
+      el(doc, 'span', 'stop-filters', filters.length ? `[${filters.join(' ')}]` : ''),
+    ];
+    if (preset.id === NEARBY_BOARD_ID) {
+      if (preset.following) {
+        const all = el(doc, 'button', 'show-all', 'show all');
+        all.type = 'button';
+        all.dataset.action = 'show-all';
+        nodes.push(all);
+      } else if (board.lastGood) {
+        nodes.push(el(doc, 'span', 'stop-hint', 'tap a departure to follow it'));
+      }
+    }
+    replaceIfChanged(ui.stopHeader, nodes);
   }
 
-  function departureRow(dep, stopName, now) {
+  function departureRow(dep, stopName, now, pickable) {
     const state = ojp.departureState(dep);
     const row = el(doc, 'li', `departure ${state}`);
+    if (pickable) {
+      row.classList.add('pickable');
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.dataset.line = dep.line;
+      row.dataset.direction = ojp.shortenDestination(dep.destination, stopName);
+    }
     const countdown = ojp.formatCountdown(ojp.effectiveTime(dep), now);
 
     const line = el(doc, 'span', 'line', dep.line);
@@ -659,37 +737,66 @@ export function startApp({
     return row;
   }
 
-  function renderDepartures(board, filtered, now) {
-    ui.departures.replaceChildren();
+  function departureNodes(board, filtered, now) {
     if (!board.lastGood) {
       const msg = board.lastError ? `! ${board.lastError}` :
           (token ? 'loading…' : 'Enter your OJP API key to start.');
-      ui.departures.append(
-          el(doc, 'li', board.lastError ? 'message error' : 'message', msg));
-      return;
+      return [el(doc, 'li', board.lastError ? 'message error' : 'message', msg)];
     }
     if (!filtered.length) {
-      ui.departures.append(el(doc, 'li', 'message', '(no matching departures)'));
+      const nodes = [el(doc, 'li', 'message', '(no matching departures)')];
       const {preset} = board;
       const all = ojp.destinationsForLines(board.lastGood.departures, preset.lines);
       if (preset.direction && all.length) {
         const names = all.map((d) => ojp.shortenDestination(d, board.lastGood.stop.name));
-        ui.departures.append(el(
+        nodes.push(el(
             doc, 'li', 'message hint',
             `Line ${preset.lines.join(',')} here goes to: ${names.join(', ')}`));
       }
-      return;
+      return nodes;
     }
+    const pickable = board.preset.id === NEARBY_BOARD_ID &&
+        !board.preset.following;
+    const nodes = [];
     const seenSituations = new Set();
     for (const dep of filtered) {
-      ui.departures.append(departureRow(dep, board.lastGood.stop.name, now));
+      nodes.push(departureRow(dep, board.lastGood.stop.name, now, pickable));
       for (const situation of dep.situations) {
         if (seenSituations.has(situation)) continue;
         seenSituations.add(situation);
-        ui.departures.append(el(doc, 'li', 'situation', `▲ ${situation}`));
+        nodes.push(el(doc, 'li', 'situation', `▲ ${situation}`));
       }
     }
+    return nodes;
   }
+
+  function renderDepartures(board, filtered, now) {
+    replaceIfChanged(ui.departures, departureNodes(board, filtered, now));
+  }
+
+  // Delegated, so the handlers survive re-renders.
+  function pickableRow(target) {
+    const row = target.closest && target.closest('li.pickable');
+    return row && ui.departures.contains(row) ? row : null;
+  }
+  function followRow(row) {
+    setNearbyFollow({line: row.dataset.line, direction: row.dataset.direction});
+  }
+  ui.departures.addEventListener('click', (event) => {
+    const row = pickableRow(event.target);
+    if (row) followRow(row);
+  });
+  ui.departures.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const row = pickableRow(event.target);
+    if (!row) return;
+    event.preventDefault();
+    followRow(row);
+  });
+  ui.stopHeader.addEventListener('click', (event) => {
+    const button = event.target.closest && event.target.closest('[data-action="show-all"]');
+    if (button) setNearbyFollow(null);
+  });
 
   function render() {
     const now = clock();

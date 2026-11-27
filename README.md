@@ -45,7 +45,10 @@ The screenshots use sample data (see
 - **Nearby stops**: the "📍 nearby" button uses your location to list the five
   closest stops within 1 km, with their distance. Picking one opens a
   temporary, unfiltered board for that stop as an extra tab (up to 12
-  departures); its ✕ closes it again. The tab is not kept across reloads.
+  departures); its ✕ closes it again. Tap a departure on that board to follow
+  its line and direction: the board reloads and shows the next 4 departures
+  of just that line, and "show all" goes back. The tab is not kept across
+  reloads.
 - **Installable** as a home-screen app (web app manifest, Apple touch icon,
   standalone display mode).
 - **Light and dark mode** follow the system setting.
@@ -183,7 +186,8 @@ Other tunables live next to it: `REFRESH_SECONDS` (poll interval),
 `MIN_REFRESH_SECONDS` (manual refresh limit), `STALE_AFTER_SECONDS`,
 `DEPARTURE_LIMIT` (rows shown) and `FETCH_COUNT` (raw departures requested so
 enough survive the filters). The nearby search uses `NEARBY_STOP_COUNT`,
-`NEARBY_RADIUS_METERS` and `NEARBY_DEPARTURE_LIMIT`.
+`NEARBY_RADIUS_METERS` and `NEARBY_DEPARTURE_LIMIT`; following one line uses
+`FOLLOW_DEPARTURE_LIMIT` (rows) and `FOLLOW_FETCH_COUNT` (departures requested).
 
 ## Project structure
 
