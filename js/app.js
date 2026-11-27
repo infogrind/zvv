@@ -39,6 +39,18 @@ export const DEPARTURE_LIMIT = 6;
 /** Raw stop events requested so enough survive the line/direction filter. */
 export const FETCH_COUNT = 40;
 
+/** Nearby stops: how many to offer, search radius, rows on their board. */
+export const NEARBY_STOP_COUNT = 5;
+export const NEARBY_RADIUS_METERS = 1000;
+export const NEARBY_DEPARTURE_LIMIT = 12;
+export const NEARBY_BOARD_ID = 'nearby';
+/** Geolocation options: a fix up to a minute old is good enough. */
+const GEOLOCATION_OPTIONS = Object.freeze({
+  enableHighAccuracy: true,
+  timeout: 15000,
+  maximumAge: 60000,
+});
+
 export const TOKEN_STORAGE_KEY = 'zvv-webapp.ojp-token';
 export const STOP_CACHE_STORAGE_KEY = 'zvv-webapp.stop-refs';
 
@@ -61,11 +73,46 @@ function readJson(storage, key, fallback) {
   }
 }
 
+/** Creates the mutable state of one departure board. */
+function makeBoard(preset, resolvedStop = null) {
+  return {
+    preset,
+    resolvedStop,
+    lastGood: null,
+    lastError: '',
+    failures: 0,
+    nextFetchAt: 0,
+    lastAttemptAt: 0,
+    inFlight: false,
+  };
+}
+
+/** Drops the "Zürich, " prefix, which every city stop has. */
+function shortStopName(name) {
+  return String(name).replace(/^Zürich,\s*/, '');
+}
+
+/** User-facing text for a GeolocationPositionError. */
+function geolocationErrorMessage(err) {
+  switch (err && err.code) {
+    case 1:
+      return 'Location access was denied. Allow location for this site in ' +
+          'your browser settings, then try again.';
+    case 2:
+      return 'Your location is not available right now.';
+    case 3:
+      return 'Finding your location took too long.';
+    default:
+      return 'Could not get your location.';
+  }
+}
+
 /**
  * Starts the app.
  * @param {{doc?: !Document, storage?: !Storage, fetchFn?: Function,
  *     clock?: function(): !Date, presets?: !Array<!Object>,
- *     autoStart?: boolean}=} options Dependencies (overridable for tests).
+ *     geolocation?: ?Geolocation, autoStart?: boolean}=} options
+ *     Dependencies (overridable for tests).
  * @return {!Object} Handle with `tick()` and `stop()` for tests.
  */
 export function startApp({
@@ -74,6 +121,8 @@ export function startApp({
   fetchFn = (...args) => window.fetch(...args),
   clock = () => new Date(),
   presets = PRESETS,
+  geolocation = (typeof navigator !== 'undefined' && navigator.geolocation) ||
+      null,
   autoStart = true,
 } = {}) {
   const $ = (id) => doc.getElementById(id);
@@ -92,18 +141,16 @@ export function startApp({
     keyMessage: $('key-message'),
     keyForget: $('key-forget'),
     keyCancel: $('key-cancel'),
+    nearbyButton: $('nearby-button'),
+    nearbyDialog: $('nearby-dialog'),
+    nearbyMessage: $('nearby-message'),
+    nearbyList: $('nearby-list'),
+    nearbyRetry: $('nearby-retry'),
+    nearbyCancel: $('nearby-cancel'),
   };
 
-  const boards = presets.map((preset) => ({
-    preset,
-    resolvedStop: null,
-    lastGood: null,
-    lastError: '',
-    failures: 0,
-    nextFetchAt: 0,
-    lastAttemptAt: 0,
-    inFlight: false,
-  }));
+  // The preset boards, plus at most one temporary "nearby" board at the end.
+  const boards = presets.map((preset) => makeBoard(preset));
 
   let token = storage.getItem(TOKEN_STORAGE_KEY) || '';
   let client = null;
@@ -113,6 +160,9 @@ export function startApp({
   // Bumped on every key change so responses to requests made with a
   // superseded key are ignored.
   let tokenGeneration = 0;
+  // Bumped on every nearby lookup and when its dialog closes, so a late
+  // answer never fills a dialog that is closed or showing a newer lookup.
+  let nearbyGeneration = 0;
 
   function getClient() {
     if (!token) return null;
@@ -195,6 +245,174 @@ export function startApp({
   });
 
   ui.keyButton.addEventListener('click', () => openKeyDialog());
+
+  // -------------------------------------------------------------------------
+  // Nearby stops
+  // -------------------------------------------------------------------------
+
+  function showDialog(dialog) {
+    if (dialog.open) return;
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute('open', '');
+    }
+  }
+
+  function hideDialog(dialog) {
+    if (typeof dialog.close === 'function') {
+      dialog.close();
+    } else {
+      dialog.removeAttribute('open');
+    }
+  }
+
+  function setNearbyStatus(message, {isError = false, canRetry = false} = {}) {
+    ui.nearbyMessage.textContent = message;
+    ui.nearbyMessage.hidden = !message;
+    ui.nearbyMessage.classList.toggle('error', isError);
+    ui.nearbyRetry.hidden = !canRetry;
+  }
+
+  function closeNearbyDialog() {
+    nearbyGeneration += 1;
+    hideDialog(ui.nearbyDialog);
+  }
+
+  function getPosition() {
+    return new Promise((resolve, reject) => {
+      geolocation.getCurrentPosition(
+          (pos) => resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          }),
+          reject, GEOLOCATION_OPTIONS);
+    });
+  }
+
+  async function lookUpNearbyStops() {
+    const generation = ++nearbyGeneration;
+    const isStale = () => generation !== nearbyGeneration;
+    ui.nearbyList.replaceChildren();
+    if (!geolocation) {
+      setNearbyStatus('This browser cannot share your location.',
+                      {isError: true});
+      return;
+    }
+    const api = getClient();
+    if (!api) {
+      setNearbyStatus('An API key is needed first.', {isError: true});
+      return;
+    }
+    setNearbyStatus('Finding your location…');
+    let position;
+    try {
+      position = await getPosition();
+    } catch (err) {
+      if (!isStale()) {
+        setNearbyStatus(geolocationErrorMessage(err),
+                        {isError: true, canRetry: true});
+      }
+      return;
+    }
+    if (isStale()) return;
+    setNearbyStatus('Looking up stops…');
+    let stops;
+    try {
+      stops = await api.findNearbyStops(
+          position, {limit: NEARBY_STOP_COUNT,
+                     radiusMeters: NEARBY_RADIUS_METERS});
+    } catch (err) {
+      if (isStale()) return;
+      const message = err && err.message ? err.message : String(err);
+      setNearbyStatus(`Could not look up stops: ${message}`,
+                      {isError: true, canRetry: true});
+      if (err instanceof ojp.OjpError && err.isAuthError) {
+        closeNearbyDialog();
+        openKeyDialog(`${message}. Please check or replace your key.`);
+      }
+      return;
+    }
+    if (isStale()) return;
+    if (!stops.length) {
+      setNearbyStatus(
+          `No stops within ${ojp.formatDistance(NEARBY_RADIUS_METERS)}.`,
+          {canRetry: true});
+      return;
+    }
+    setNearbyStatus('');
+    for (const stop of stops) {
+      const item = el(doc, 'li');
+      const button = el(doc, 'button', 'nearby-stop');
+      button.type = 'button';
+      button.append(el(doc, 'span', 'nearby-name', shortStopName(stop.name)));
+      if (stop.distanceMeters !== null) {
+        button.append(el(doc, 'span', 'nearby-distance',
+                         ojp.formatDistance(stop.distanceMeters)));
+      }
+      button.addEventListener('click', () => {
+        closeNearbyDialog();
+        showNearbyBoard(stop);
+      });
+      item.append(button);
+      ui.nearbyList.append(item);
+    }
+  }
+
+  function nearbyBoardIndex() {
+    return boards.findIndex((b) => b.preset.id === NEARBY_BOARD_ID);
+  }
+
+  /** Replaces the nearby board (if any) with one for `stop`, and shows it. */
+  function showNearbyBoard(stop) {
+    const preset = {
+      id: NEARBY_BOARD_ID,
+      label: `📍 ${shortStopName(stop.name)}`,
+      stopName: stop.name,
+      lines: [],
+      direction: '',
+      limit: NEARBY_DEPARTURE_LIMIT,
+    };
+    const resolved = {
+      stopRef: stop.stopRef,
+      name: stop.name,
+      isStopPoint: stop.isStopPoint,
+    };
+    const board = makeBoard(preset, resolved);
+    const existing = nearbyBoardIndex();
+    if (existing >= 0) {
+      boards[existing] = board;
+    } else {
+      boards.push(board);
+    }
+    userPicked = true;
+    activeIndex = boards.indexOf(board);
+    renderTabs();
+    tick();
+  }
+
+  function closeNearbyBoard() {
+    const index = nearbyBoardIndex();
+    if (index < 0) return;
+    boards.splice(index, 1);
+    if (activeIndex >= boards.length || activeIndex === index) {
+      // Back to the board the time of day calls for.
+      userPicked = false;
+      activeIndex = ojp.defaultPresetIndex(presets, clock());
+    }
+    renderTabs();
+    tick();
+  }
+
+  ui.nearbyButton.addEventListener('click', () => {
+    showDialog(ui.nearbyDialog);
+    lookUpNearbyStops();
+  });
+  ui.nearbyRetry.addEventListener('click', () => lookUpNearbyStops());
+  ui.nearbyCancel.addEventListener('click', () => closeNearbyDialog());
+  ui.nearbyDialog.addEventListener('close', () => {
+    nearbyGeneration += 1;
+  });
 
   // -------------------------------------------------------------------------
   // Fetching
@@ -308,6 +526,14 @@ export function startApp({
         tick();
       });
       ui.tabs.append(button);
+      if (board.preset.id === NEARBY_BOARD_ID) {
+        const close = el(doc, 'button', 'tab-close', '✕');
+        close.type = 'button';
+        close.title = 'Close this board';
+        close.setAttribute('aria-label', `Close ${board.preset.label}`);
+        close.addEventListener('click', closeNearbyBoard);
+        ui.tabs.append(close);
+      }
     });
   }
 
@@ -463,13 +689,14 @@ export function startApp({
     const board = boards[activeIndex];
     const filtered = board.lastGood ?
         ojp.filterDepartures(board.lastGood.departures, board.preset, now,
-                             DEPARTURE_LIMIT) :
+                             board.preset.limit || DEPARTURE_LIMIT) :
         [];
     renderTitle(board, now);
     renderSummary(board, filtered, now);
     renderStopHeader(board);
     renderDepartures(board, filtered, now);
     ui.refresh.disabled = !token || board.inFlight;
+    ui.nearbyButton.disabled = !token;
   }
 
   // -------------------------------------------------------------------------

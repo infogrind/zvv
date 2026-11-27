@@ -33,6 +33,7 @@
     <ol id="departures" class="departures"></ol>
     <footer class="footer">
       <button id="refresh-button" type="button">↻ refresh</button>
+      <button id="nearby-button" type="button">📍 nearby</button>
       <button id="key-button" type="button">API key</button>
     </footer>
   </main>
@@ -55,6 +56,18 @@
         <button type="submit" class="primary">Save</button>
         <button id="key-forget" type="button" hidden>Forget key</button>
         <button id="key-cancel" type="button" hidden>Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="nearby-dialog" class="key-dialog nearby-dialog">
+    <form id="nearby-form" method="dialog">
+      <h2>Stops near you</h2>
+      <p id="nearby-message" class="nearby-message" aria-live="polite"></p>
+      <ul id="nearby-list" class="nearby-list"></ul>
+      <div class="dialog-buttons">
+        <button id="nearby-retry" type="button" hidden>Try again</button>
+        <button id="nearby-cancel" type="button">Cancel</button>
       </div>
     </form>
   </dialog>
