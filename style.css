@@ -188,6 +188,45 @@ button {
   opacity: 0.85;
 }
 
+.stop-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: normal;
+  align-self: center;
+}
+
+.show-all {
+  margin-left: auto;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--frame);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--frame);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.departure.pickable {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.departure.pickable:focus-visible {
+  background: var(--divider);
+  outline: none;
+}
+
+/* Hover only with a real pointer: on phones it would stick after a tap. */
+@media (hover: hover) {
+  .departure.pickable:hover {
+    background: var(--divider);
+  }
+}
+
+.departure.pickable:active {
+  background: var(--border);
+}
+
 .departures {
   list-style: none;
   margin: 0;
