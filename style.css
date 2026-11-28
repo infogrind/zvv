@@ -131,17 +131,30 @@ button {
   color: var(--muted);
 }
 
+/* Row 1: the presets. Row 2: the favorites, or the open nearby board. Tabs
+ * share a row evenly and shorten their names rather than scroll. */
 .tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.4rem;
   padding: 0.6rem 0.8rem 0;
 }
 
+.tab-row {
+  display: flex;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
 .tab {
-  flex: 1;
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 0;
   min-height: 2.6rem;
-  padding: 0.3rem 0.5rem;
+  padding: 0.3rem 0.4rem;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: transparent;
@@ -155,10 +168,41 @@ button {
   font-weight: bold;
 }
 
-/* Wide enough for a full preset label; the nearby tab wraps onto its own
- * row on phones instead of squeezing every label. */
-.tab {
-  flex: 1 1 9rem;
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Name over direction, on favorite tabs. */
+.tab-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+  text-align: left;
+}
+
+.tab-direction {
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-icon {
+  flex: none;
+}
+
+.tab .line {
+  flex: none;
+  min-width: 1.7rem;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-weight: bold;
+  text-align: center;
 }
 
 .tab-close {
@@ -193,6 +237,29 @@ button {
   font-size: 0.8rem;
   font-weight: normal;
   align-self: center;
+}
+
+/* Saves or forgets the followed line as a favorite. */
+.star {
+  margin-left: auto;
+  padding: 0 0.5rem;
+  border: 1px solid var(--frame);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--frame);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.star:disabled {
+  border-color: var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.star + .show-all {
+  margin-left: 0;
 }
 
 .show-all {
@@ -505,7 +572,8 @@ button {
  * 51 are the temporary construction lines of 2026. The badge is
  * `<span class="line" data-tram="N">`, set for trams only.
  */
-.departure .line[data-tram] {
+.departure .line[data-tram],
+.tab .line[data-tram] {
   background: var(--tram-bg);
   border-color: var(--tram-bg);
   color: var(--tram-fg);
@@ -537,7 +605,10 @@ button {
   /* Black badges (7, 50, 51) would vanish on the dark panel. */
   .departure .line[data-tram="7"],
   .departure .line[data-tram="50"],
-  .departure .line[data-tram="51"] {
+  .departure .line[data-tram="51"],
+  .tab .line[data-tram="7"],
+  .tab .line[data-tram="50"],
+  .tab .line[data-tram="51"] {
     border-color: var(--muted);
   }
 }

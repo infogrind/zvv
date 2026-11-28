@@ -7,8 +7,9 @@
  *   python3 -m http.server 8765        # in the repository root
  *   node docs/screenshots/render.js    # writes the PNGs next to this file
  *
- * All OJP responses, the location and the clock (07:42:10 in Zurich) are
- * faked, so no API key is needed and the pictures look the same each run.
+ * All OJP responses, the location, the clock (07:42:10 in Zurich) and two
+ * saved favorites are faked, so no API key is needed and the pictures look
+ * the same each run.
  */
 const {chromium} = require('playwright');
 const OUT = process.argv[2] || __dirname;
@@ -73,6 +74,11 @@ async function open(browser, scheme) {
     localStorage.setItem('zvv-webapp.stop-refs', JSON.stringify({
       'Zürich, Wetlistrasse': {stopRef: '1', name: 'Zürich, Wetlistrasse', isStopPoint: false},
       'Zürich, Bahnhof Enge': {stopRef: '2', name: 'Zürich, Bahnhof Enge', isStopPoint: false}}));
+    localStorage.setItem('zvv-webapp.favorites', JSON.stringify([
+      {stopRef: '8576193', stopName: 'Zürich, Bellevue', isStopPoint: false,
+       line: '11', direction: 'Rehalp', mode: 'tram'},
+      {stopRef: '8591123', stopName: 'Zürich, Opernhaus', isStopPoint: false,
+       line: '2', direction: 'Farbhof', mode: 'tram'}]));
   });
   await page.goto('http://localhost:8765/');
   await page.waitForSelector('.departure');

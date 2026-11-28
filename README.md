@@ -13,7 +13,7 @@ direction), with the right one picked automatically by time of day.
 
 | Commute board | Stops near you | Nearby board, dark mode |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/board.png" width="260" alt="Tram 4 board at Wetlistrasse with live countdowns, a 2-minute delay and a disruption message"> | <img src="docs/screenshots/nearby-stops.png" width="260" alt="Popup listing the five closest stops with their distance"> | <img src="docs/screenshots/nearby-board-dark.png" width="260" alt="Unfiltered board for Bellevue in dark mode, with tram line numbers in their line colors"> |
+| <img src="docs/screenshots/board.png" width="260" alt="Tram 4 board at Wetlistrasse with live countdowns, a 2-minute delay and a disruption message, and two favorites in the second tab row"> | <img src="docs/screenshots/nearby-stops.png" width="260" alt="Popup listing the five closest stops with their distance"> | <img src="docs/screenshots/nearby-board-dark.png" width="260" alt="Unfiltered board for Bellevue in dark mode, with tram line numbers in their line colors"> |
 
 The screenshots use sample data (see
 [Regenerating the screenshots](#regenerating-the-screenshots)).
@@ -52,6 +52,18 @@ The screenshots use sample data (see
   its line and direction: the board reloads and shows the next 4 departures
   of just that line, and "show all" goes back. The tab is not kept across
   reloads.
+- **Favorites**: while following a line on the nearby board, ☆ saves that
+  stop, line and direction as a favorite (up to 3); ★ removes it again, from
+  the nearby board or from the favorite's own board. Favorites are kept in
+  this browser only and are never picked as the default board. Follow a
+  departure that goes to the line's regular end stop: the favorite then
+  matches every trip to that destination.
+- **Compact two-row tabs**: the first row holds the commute boards, the
+  second the favorites. While a nearby board is open, it takes the second row
+  until its ✕ closes it. Tabs show the line number in its color and a
+  shortened stop name ("Zürich, " dropped, "Bahnhof" → "Bhf.", "…strasse" →
+  "…str."). Favorite tabs also show their direction below the name, so two
+  favorites at the same stop (e.g. both directions of one bus) stay apart.
 - **Installable** as a home-screen app (web app manifest, Apple touch icon,
   standalone display mode).
 - **Light and dark mode** follow the system setting.
@@ -132,8 +144,8 @@ The screenshots in this README are made by
 [`docs/screenshots/render.js`](docs/screenshots/render.js). It opens the app in
 a headless Chromium at phone size and fakes everything outside the page: the
 OJP responses (sample departures, a disruption, five nearby stops), the
-location, and the clock (07:42:10 in Zurich). No API key or network access is
-needed, and the pictures look the same each run. Regenerate them after
+location, two saved favorites, and the clock (07:42:10 in Zurich). No API key
+or network access is needed, and the pictures look the same each run. Regenerate them after
 changing the UI:
 
 1. Install a current LTS release of [Node.js](https://nodejs.org/) and Python 3.
@@ -174,23 +186,27 @@ Boards are defined in `PRESETS` at the top of [`js/app.js`](js/app.js):
 ```js
 {
   id: 'morning',
-  label: 'Tram 4 · Wetlistrasse',   // tab label
+  label: 'Tram 4 · Wetlistrasse',   // accessible name and tooltip
   stopName: 'Zürich, Wetlistrasse', // resolved to an OJP stop ID on first use
   lines: ['4'],                     // empty array = all lines
   direction: 'Bahnhof',             // substring of the destination; '' = any
+  mode: 'tram',                     // 'tram' colors the line on the tab
   defaultFromHour: 0,               // board is the default from this hour on
 }
 ```
 
 The board with the latest `defaultFromHour` that is not after the current
-Zurich hour is shown by default.
+Zurich hour is shown by default. The tab itself shows the line (when the
+board has exactly one) and the stop name, shortened.
 
 Other tunables live next to it: `REFRESH_SECONDS` (poll interval),
 `MIN_REFRESH_SECONDS` (manual refresh limit), `STALE_AFTER_SECONDS`,
 `DEPARTURE_LIMIT` (rows shown) and `FETCH_COUNT` (raw departures requested so
 enough survive the filters). The nearby search uses `NEARBY_STOP_COUNT`,
 `NEARBY_RADIUS_METERS` and `NEARBY_DEPARTURE_LIMIT`; following one line uses
-`FOLLOW_DEPARTURE_LIMIT` (rows) and `FOLLOW_FETCH_COUNT` (departures requested).
+`FOLLOW_DEPARTURE_LIMIT` (rows) and `FOLLOW_FETCH_COUNT` (departures
+requested), as do favorite boards. `MAX_FAVORITES` caps the number of
+favorites.
 
 ## Project structure
 
@@ -235,6 +251,8 @@ so the app can be driven from tests without a browser or network.
 - Requests are sent without cookies or a referrer, and error messages never
   include the key.
 - "Forget key" in the API key dialog removes it from the browser.
+- Favorites are stored only in this browser's `localStorage`
+  (`zvv-webapp.favorites`), as stop ID, stop name, line, direction and mode.
 - Your location is only requested when you tap "📍 nearby". It is sent only to
   `api.opentransportdata.swiss` (to find stops) and is not stored.
 
