@@ -70,18 +70,28 @@ button {
   overflow: hidden;
 }
 
+/* One line on any phone: the logo text gives way ("◈ DEPAR…") before the
+ * clock or the update age would wrap. */
 .title-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
   gap: 0.5rem;
   padding: 0.6rem 0.8rem 0.2rem;
 }
 
 .logo {
+  min-width: 0;
+  overflow: hidden;
   color: var(--frame);
   font-weight: bold;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sep,
+.clock {
+  flex: none;
 }
 
 .sep,
