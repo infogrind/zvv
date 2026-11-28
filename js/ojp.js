@@ -707,6 +707,24 @@ export function shortenDestination(destination, stopName) {
 }
 
 /**
+ * Compact stop name for a tab: drops the "Zürich, " prefix and abbreviates
+ * "Bahnhof" to "Bhf." and a trailing "strasse" to "str."
+ * ("Zürich, Bahnhof Enge" -> "Bhf. Enge", "Wetlistrasse" -> "Wetlistr.").
+ */
+export function shortenLabel(name) {
+  return String(name)
+      .replace(/^Zürich,\s*/, '')
+      .replace(/(^|[\s,/(-])Bahnhof(?=$|[\s,/)-])/g, '$1Bhf.')
+      .replace(/strasse(?=$|[\s,/)-])/g, 'str.')
+      .replace(/Strasse(?=$|[\s,/)-])/g, 'Str.');
+}
+
+/** Identity of a favorite: the same stop, line and direction. */
+export function favoriteKey({stopRef, line, direction}) {
+  return [stopRef, line, direction].map((v) => String(v ?? '')).join('|');
+}
+
+/**
  * Index of the preset to show by default: the one with the latest
  * `defaultFromHour` that is <= the current Zurich hour.
  */

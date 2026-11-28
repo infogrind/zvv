@@ -19,6 +19,7 @@ export const PRESETS = Object.freeze([
     stopName: 'Zürich, Wetlistrasse',
     lines: ['4'],
     direction: 'Bahnhof',
+    mode: 'tram',  // Colors the line badge on the tab.
     defaultFromHour: 0,  // Before noon: first tram of the morning commute.
   },
   {
@@ -27,6 +28,7 @@ export const PRESETS = Object.freeze([
     stopName: 'Zürich, Bahnhof Enge',
     lines: ['8'],
     direction: 'Kirche Fluntern',
+    mode: 'tram',
     defaultFromHour: 12,  // After noon: first tram of the evening commute.
   },
 ]);
@@ -68,6 +70,13 @@ const FRESH_GEOLOCATION_OPTIONS = Object.freeze({
 
 export const TOKEN_STORAGE_KEY = 'zvv-webapp.ojp-token';
 export const STOP_CACHE_STORAGE_KEY = 'zvv-webapp.stop-refs';
+/**
+ * Favorites: boards saved with the star while following a line on the
+ * nearby board. Kept in this browser only, shown after the presets, and never
+ * picked as the default board.
+ */
+export const FAVORITES_STORAGE_KEY = 'zvv-webapp.favorites';
+export const MAX_FAVORITES = 3;
 
 const API_MANAGER_URL = 'https://api-manager.opentransportdata.swiss/';
 
@@ -123,6 +132,39 @@ function replaceIfChanged(container, nodes) {
 /** Drops the "Zürich, " prefix, which every city stop has. */
 function shortStopName(name) {
   return String(name).replace(/^Zürich,\s*/, '');
+}
+
+/** Saved favorites, skipping malformed entries; at most MAX_FAVORITES. */
+function readFavorites(storage) {
+  const saved = readJson(storage, FAVORITES_STORAGE_KEY, []);
+  if (!Array.isArray(saved)) return [];
+  return saved.filter((f) => f && typeof f.stopRef === 'string' && f.stopRef &&
+      typeof f.stopName === 'string' && typeof f.line === 'string' && f.line &&
+      typeof f.direction === 'string').slice(0, MAX_FAVORITES);
+}
+
+/** Board preset for a saved favorite. */
+function favoritePreset(fav) {
+  return {
+    id: `fav:${ojp.favoriteKey(fav)}`,
+    label: `${fav.line} · ${shortStopName(fav.stopName)} → ${fav.direction}`,
+    stopName: fav.stopName,
+    lines: [fav.line],
+    direction: fav.direction,
+    mode: fav.mode || '',
+    limit: FOLLOW_DEPARTURE_LIMIT,
+    fetchCount: FOLLOW_FETCH_COUNT,
+    favorite: true,
+  };
+}
+
+/** Board for a saved favorite; its stop is known, so it is never looked up. */
+function favoriteBoard(fav) {
+  return makeBoard(favoritePreset(fav), {
+    stopRef: fav.stopRef,
+    name: fav.stopName,
+    isStopPoint: Boolean(fav.isStopPoint),
+  });
 }
 
 /** User-facing text for a GeolocationPositionError. */
@@ -183,8 +225,13 @@ export function startApp({
     nearbyCancel: $('nearby-cancel'),
   };
 
-  // The preset boards, plus at most one temporary "nearby" board at the end.
-  const boards = presets.map((preset) => makeBoard(preset));
+  // The preset boards, then the saved favorites, then at most one temporary
+  // "nearby" board at the end. Indexes 0..presets.length-1 are the presets.
+  let favorites = readFavorites(storage);
+  const boards = [
+    ...presets.map((preset) => makeBoard(preset)),
+    ...favorites.map(favoriteBoard),
+  ];
 
   let token = storage.getItem(TOKEN_STORAGE_KEY) || '';
   let client = null;
@@ -434,6 +481,7 @@ export function startApp({
       stopName,
       lines: [follow.line],
       direction: follow.direction,
+      mode: follow.mode || '',
       limit: FOLLOW_DEPARTURE_LIMIT,
       fetchCount: FOLLOW_FETCH_COUNT,
       following: true,
@@ -494,6 +542,79 @@ export function startApp({
     }
     renderTabs();
     tick();
+  }
+
+  // -------------------------------------------------------------------------
+  // Favorites
+  // -------------------------------------------------------------------------
+
+  /**
+   * The favorite a board shows or could be saved as: a favorite board, or the
+   * nearby board while it follows one line. Null for other boards.
+   */
+  function favoriteFor(board) {
+    const {preset, resolvedStop} = board;
+    if (!resolvedStop || !(preset.favorite || preset.following)) return null;
+    return {
+      stopRef: resolvedStop.stopRef,
+      stopName: resolvedStop.name || preset.stopName,
+      isStopPoint: Boolean(resolvedStop.isStopPoint),
+      line: preset.lines[0],
+      direction: preset.direction,
+      mode: preset.mode || '',
+    };
+  }
+
+  function isSaved(fav) {
+    const key = ojp.favoriteKey(fav);
+    return favorites.some((f) => ojp.favoriteKey(f) === key);
+  }
+
+  function saveFavorites() {
+    storage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
+  }
+
+  /** Saves `fav` and adds its board before the nearby board. */
+  function addFavorite(fav) {
+    if (isSaved(fav) || favorites.length >= MAX_FAVORITES) return;
+    const active = boards[activeIndex];
+    favorites = [...favorites, fav];
+    saveFavorites();
+    const nearby = nearbyBoardIndex();
+    boards.splice(nearby >= 0 ? nearby : boards.length, 0, favoriteBoard(fav));
+    activeIndex = boards.indexOf(active);
+    renderTabs();
+    render();
+  }
+
+  /**
+   * Forgets `fav` and drops its board. If that board was showing, the time of
+   * day picks the board again.
+   */
+  function removeFavorite(fav) {
+    const key = ojp.favoriteKey(fav);
+    favorites = favorites.filter((f) => ojp.favoriteKey(f) !== key);
+    saveFavorites();
+    const active = boards[activeIndex];
+    const index = boards.findIndex((b) => b.preset.id === `fav:${key}`);
+    if (index >= 0) boards.splice(index, 1);
+    activeIndex = boards.indexOf(active);
+    if (activeIndex < 0) {
+      userPicked = false;
+      activeIndex = ojp.defaultPresetIndex(presets, clock());
+    }
+    renderTabs();
+    tick();
+  }
+
+  function toggleFavorite() {
+    const fav = favoriteFor(boards[activeIndex]);
+    if (!fav) return;
+    if (isSaved(fav)) {
+      removeFavorite(fav);
+    } else {
+      addFavorite(fav);
+    }
   }
 
   ui.nearbyButton.addEventListener('click', () => {
@@ -609,29 +730,77 @@ export function startApp({
   // Rendering
   // -------------------------------------------------------------------------
 
+  /**
+   * Tab content: a line badge (tram-colored) and the shortened stop name,
+   * with the direction below it when `showDirection` is set (favorites).
+   */
+  function tabContent(button, preset, showDirection) {
+    if (preset.id === NEARBY_BOARD_ID) {
+      button.append(el(doc, 'span', 'tab-icon', '📍'));
+    }
+    if (preset.lines.length === 1) {
+      const line = el(doc, 'span', 'line', preset.lines[0]);
+      if (preset.mode === 'tram') line.dataset.tram = preset.lines[0].trim();
+      button.append(line);
+    }
+    const name = el(doc, 'span', 'tab-name', ojp.shortenLabel(preset.stopName));
+    if (!showDirection) {
+      button.append(name);
+      return;
+    }
+    const text = el(doc, 'span', 'tab-text');
+    text.append(name, el(doc, 'span', 'tab-direction',
+                         `→ ${ojp.shortenLabel(preset.direction)}`));
+    button.append(text);
+  }
+
+  function tabButton(board, showDirection = false) {
+    const index = boards.indexOf(board);
+    const button = el(doc, 'button', 'tab');
+    tabContent(button, board.preset, showDirection);
+    button.type = 'button';
+    button.title = board.preset.label;
+    button.setAttribute('aria-label', board.preset.label);
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-selected', String(index === activeIndex));
+    button.addEventListener('click', () => {
+      userPicked = true;
+      activeIndex = index;
+      renderTabs();
+      tick();
+    });
+    return button;
+  }
+
+  /**
+   * Row 1: the presets. Row 2: the nearby board (with its close button) if
+   * one is open, otherwise the favorites; left out when empty.
+   */
   function renderTabs() {
-    ui.tabs.replaceChildren();
-    boards.forEach((board, index) => {
-      const button = el(doc, 'button', 'tab', board.preset.label);
-      button.type = 'button';
-      button.setAttribute('role', 'tab');
-      button.setAttribute('aria-selected', String(index === activeIndex));
-      button.addEventListener('click', () => {
-        userPicked = true;
-        activeIndex = index;
-        renderTabs();
-        tick();
-      });
-      ui.tabs.append(button);
-      if (board.preset.id === NEARBY_BOARD_ID) {
+    const presetRow = el(doc, 'div', 'tab-row');
+    presetRow.setAttribute('role', 'presentation');
+    presetRow.append(...boards.slice(0, presets.length).map((b) => tabButton(b)));
+    const rows = [presetRow];
+
+    const nearbyIndex = nearbyBoardIndex();
+    const second = nearbyIndex >= 0 ? [boards[nearbyIndex]] :
+        boards.filter((b) => b.preset.favorite);
+    if (second.length) {
+      const row = el(doc, 'div', 'tab-row');
+      row.setAttribute('role', 'presentation');
+      row.append(...second.map((b) => tabButton(b, Boolean(b.preset.favorite))));
+      if (nearbyIndex >= 0) {
         const close = el(doc, 'button', 'tab-close', '✕');
         close.type = 'button';
         close.title = 'Close this board';
-        close.setAttribute('aria-label', `Close ${board.preset.label}`);
+        close.setAttribute('aria-label',
+                           `Close ${boards[nearbyIndex].preset.label}`);
         close.addEventListener('click', closeNearbyBoard);
-        ui.tabs.append(close);
+        row.append(close);
       }
-    });
+      rows.push(row);
+    }
+    ui.tabs.replaceChildren(...rows);
   }
 
   function renderTitle(board, now) {
@@ -712,6 +881,21 @@ export function startApp({
       el(doc, 'span', 'stop-name', `◉ ${name}`),
       el(doc, 'span', 'stop-filters', filters.length ? `[${filters.join(' ')}]` : ''),
     ];
+    const fav = favoriteFor(board);
+    if (fav) {
+      const saved = isSaved(fav);
+      const full = !saved && favorites.length >= MAX_FAVORITES;
+      const star = el(doc, 'button', 'star', saved ? '★' : '☆');
+      star.type = 'button';
+      star.dataset.action = 'star';
+      star.dataset.saved = String(saved);
+      star.disabled = full;
+      star.title = full ? `max ${MAX_FAVORITES} favorites` :
+          (saved ? 'Remove from favorites' : 'Add to favorites');
+      star.setAttribute('aria-label', star.title);
+      star.setAttribute('aria-pressed', String(saved));
+      nodes.push(star);
+    }
     if (preset.id === NEARBY_BOARD_ID) {
       if (preset.following) {
         const all = el(doc, 'button', 'show-all', 'show all');
@@ -734,6 +918,7 @@ export function startApp({
       row.setAttribute('role', 'button');
       row.dataset.line = dep.line;
       row.dataset.direction = ojp.shortenDestination(dep.destination, stopName);
+      row.dataset.mode = dep.mode.toLowerCase();
     }
     const countdown = ojp.formatCountdown(ojp.effectiveTime(dep), now);
 
@@ -818,7 +1003,11 @@ export function startApp({
     return row && ui.departures.contains(row) ? row : null;
   }
   function followRow(row) {
-    setNearbyFollow({line: row.dataset.line, direction: row.dataset.direction});
+    setNearbyFollow({
+      line: row.dataset.line,
+      direction: row.dataset.direction,
+      mode: row.dataset.mode,
+    });
   }
   ui.departures.addEventListener('click', (event) => {
     const row = pickableRow(event.target);
@@ -832,8 +1021,10 @@ export function startApp({
     followRow(row);
   });
   ui.stopHeader.addEventListener('click', (event) => {
-    const button = event.target.closest && event.target.closest('[data-action="show-all"]');
-    if (button) setNearbyFollow(null);
+    const button = event.target.closest && event.target.closest('[data-action]');
+    if (!button || button.disabled) return;
+    if (button.dataset.action === 'show-all') setNearbyFollow(null);
+    if (button.dataset.action === 'star') toggleFavorite();
   });
 
   function render() {

@@ -39,10 +39,20 @@ There is no test suite, linter or formatter configured in the repo.
   is injectable so the app can be driven without a browser or network; keep
   new side effects going through these parameters (use `clock()`, not
   `new Date()`; `fetchFn`, not `fetch`).
-- Boards: `PRESETS` (top of `app.js`) become board objects via `makeBoard`;
-  at most one temporary "nearby" board (`NEARBY_BOARD_ID`) is appended at the
-  end and can be put into a "follow one line" mode. Stop names resolve to OJP
-  stop refs once and are cached in `localStorage` (`zvv-webapp.stop-refs`).
+- Boards: `boards` is ordered presets, then favorites, then at most one
+  temporary "nearby" board (`NEARBY_BOARD_ID`), and the array returned by
+  `startApp` is mutated in place. `PRESETS` (top of `app.js`) become board
+  objects via `makeBoard`; only presets take part in the time-of-day default
+  (`defaultPresetIndex(presets, …)`). The nearby board can be put into a
+  "follow one line" mode, and the ☆ in its header saves that stop/line/direction
+  as a favorite (max `MAX_FAVORITES`, `localStorage` key
+  `zvv-webapp.favorites`). Favorites carry their stop ref, so they never need a
+  name lookup. Preset stop names resolve to OJP stop refs once and are cached
+  in `localStorage` (`zvv-webapp.stop-refs`).
+- Tabs (`renderTabs`): row 1 is the presets, row 2 is the nearby board if
+  open, otherwise the favorites. Labels are a line badge plus
+  `ojp.shortenLabel(stopName)`, plus the shortened direction below it on
+  favorites; the board's `label` is only the aria-label and tooltip.
 - Polling: a 1 s `tick()` re-renders and fetches only the active board, only
   when the page is visible and `nextFetchAt` has passed. Per-board
   `failures`/`nextFetchAt`/`inFlight` implement exponential backoff (honoring
