@@ -36,7 +36,8 @@ The screenshots use sample data (see
   destinations that line actually serves from that stop, so a typo is easy to
   fix.
 - **Time-of-day default board**: before noon the morning board is shown, after
-  noon the evening board. Picking a tab by hand overrides this for the session.
+  noon on weekdays the evening board. On weekends the morning board stays all
+  day. Picking a tab by hand overrides this for the session.
 - **Polite polling**: only the visible board is refreshed, every 30 s, and only
   while the page is visible. Failures back off exponentially (up to 5 minutes)
   and respect `Retry-After`. Manual refresh is limited to once per 5 s and
@@ -192,11 +193,13 @@ Boards are defined in `PRESETS` at the top of [`js/app.js`](js/app.js):
   direction: 'Bahnhof',             // substring of the destination; '' = any
   mode: 'tram',                     // 'tram' colors the line on the tab
   defaultFromHour: 0,               // board is the default from this hour on
+  weekdaysOnly: false,              // true = never the default on Sat/Sun
 }
 ```
 
 The board with the latest `defaultFromHour` that is not after the current
-Zurich hour is shown by default. The tab itself shows the line (when the
+Zurich hour is shown by default; boards with `weekdaysOnly: true` are skipped
+on weekends (the evening board uses this). The tab itself shows the line (when the
 board has exactly one) and the stop name, shortened.
 
 Other tunables live next to it: `REFRESH_SECONDS` (poll interval),

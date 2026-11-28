@@ -30,6 +30,7 @@ export const PRESETS = Object.freeze([
     direction: 'Kirche Fluntern',
     mode: 'tram',
     defaultFromHour: 12,  // After noon: first tram of the evening commute.
+    weekdaysOnly: true,  // Weekends: the morning board stays the default.
   },
 ]);
 

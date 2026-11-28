@@ -684,6 +684,15 @@ export function zurichHour(date) {
                 }).format(date));
 }
 
+/** True on Saturday and Sunday in Zurich. */
+export function isZurichWeekend(date) {
+  const day = new Intl.DateTimeFormat('en-GB', {
+    timeZone: ZURICH_TZ,
+    weekday: 'short',
+  }).format(date);
+  return day === 'Sat' || day === 'Sun';
+}
+
 /**
  * Countdown with nearest-minute (+-30 s) rounding:
  * < 30 s -> "now"; < 59m30s -> "N'"; otherwise HH:MM (Europe/Zurich).
@@ -726,13 +735,16 @@ export function favoriteKey({stopRef, line, direction}) {
 
 /**
  * Index of the preset to show by default: the one with the latest
- * `defaultFromHour` that is <= the current Zurich hour.
+ * `defaultFromHour` that is <= the current Zurich hour. Presets marked
+ * `weekdaysOnly` are skipped on Saturday and Sunday.
  */
 export function defaultPresetIndex(presets, now) {
   const hour = zurichHour(now);
+  const weekend = isZurichWeekend(now);
   let bestIndex = 0;
   let bestFrom = -1;
   presets.forEach((preset, index) => {
+    if (preset.weekdaysOnly && weekend) return;
     const from = preset.defaultFromHour || 0;
     if (from <= hour && from > bestFrom) {
       bestIndex = index;
